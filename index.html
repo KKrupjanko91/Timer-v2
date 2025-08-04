@@ -1,0 +1,223 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Minimal Task Timer</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', Arial, sans-serif;
+      background: #f8f9fa;
+      color: #23272f;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .timer-container {
+      background: #fff;
+      border-radius: 1rem;
+      box-shadow: 0 6px 24px 0 #23272f10;
+      padding: 2rem 1.5rem;
+      width: 100%;
+      max-width: 380px;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+    .timer-display {
+      font-size: 2.4rem;
+      letter-spacing: 0.08em;
+      font-variant-numeric: tabular-nums;
+      text-align: center;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      color: #222;
+    }
+    .btn-group {
+      display: flex;
+      gap: 0.75rem;
+      justify-content: center;
+    }
+    button {
+      flex: 1;
+      background: #edf1f7;
+      border: none;
+      border-radius: 0.6rem;
+      padding: 0.7rem 0;
+      font-size: 1rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.18s;
+      color: #1a1b1f;
+    }
+    button:active {
+      background: #e1e6ee;
+    }
+    .btn-primary {
+      background: #246bfd;
+      color: #fff;
+    }
+    .btn-primary:active {
+      background: #184bb1;
+    }
+    .task-input-group {
+      display: flex;
+      gap: 0.6rem;
+    }
+    .task-input {
+      flex: 1;
+      padding: 0.55rem 0.8rem;
+      border: 1px solid #e1e6ee;
+      border-radius: 0.5rem;
+      font-size: 1rem;
+      outline: none;
+      background: #f7f9fb;
+      transition: border 0.15s;
+    }
+    .task-input:focus {
+      border: 1.5px solid #246bfd;
+    }
+    .recorded-list {
+      list-style: none;
+      max-height: 170px;
+      overflow-y: auto;
+      margin-top: 0.5rem;
+      padding-left: 0;
+    }
+    .recorded-list li {
+      padding: 0.4rem 0.7rem;
+      background: #f4f7fa;
+      border-radius: 0.4rem;
+      font-size: 1rem;
+      margin-bottom: 0.35rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: #292d34;
+      flex-wrap: wrap;
+    }
+    .recorded-list li .task {
+      font-weight: 600;
+      margin-right: 0.8em;
+      color: #246bfd;
+      white-space: pre-line;
+    }
+    .recorded-list li .time {
+      font-family: monospace;
+      font-size: 1.05em;
+      color: #343a40;
+    }
+    .recorded-list li:last-child { margin-bottom: 0; }
+    @media (max-width: 500px) {
+      .timer-container {
+        padding: 1.2rem 0.3rem;
+        max-width: 98vw;
+      }
+      .timer-display { font-size: 2rem; }
+      .task-input { font-size: 0.98rem; }
+      .recorded-list li { font-size: 0.98rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="timer-container">
+    <div class="timer-display" id="timer">00:00:00</div>
+    <div class="btn-group">
+      <button id="startBtn" class="btn-primary">Start</button>
+      <button id="stopBtn">Stop</button>
+      <button id="resetBtn">Reset</button>
+    </div>
+    <form class="task-input-group" id="taskForm" autocomplete="off" onsubmit="return false;">
+      <input
+        type="text"
+        id="taskInput"
+        class="task-input"
+        placeholder="Enter task name (optional)"
+        maxlength="80"
+      />
+      <button id="recordBtn" type="button">Record Time</button>
+    </form>
+    <ul class="recorded-list" id="recordedList"></ul>
+  </div>
+
+  <script>
+    // --- TIMER VARIABLES ---
+    let startTime = 0, elapsed = 0, timerInterval = null, running = false;
+
+    // --- DOM ELEMENTS ---
+    const timerDisplay = document.getElementById('timer');
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const recordBtn = document.getElementById('recordBtn');
+    const taskInput = document.getElementById('taskInput');
+    const recordedList = document.getElementById('recordedList');
+    const taskForm = document.getElementById('taskForm');
+
+    // --- FORMAT SECONDS TO HH:MM:SS ---
+    function formatTime(ms) {
+      const totalSeconds = Math.floor(ms / 1000);
+      const h = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
+      const m = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0');
+      const s = String(totalSeconds % 60).padStart(2, '0');
+      return `${h}:${m}:${s}`;
+    }
+
+    // --- UPDATE TIMER DISPLAY ---
+    function updateDisplay() {
+      timerDisplay.textContent = formatTime(elapsed);
+    }
+
+    // --- TIMER FUNCTIONS ---
+    function startTimer() {
+      if (running) return;
+      running = true;
+      startTime = Date.now() - elapsed;
+      timerInterval = setInterval(() => {
+        elapsed = Date.now() - startTime;
+        updateDisplay();
+      }, 200);
+      startBtn.disabled = true;
+    }
+    function stopTimer() {
+      if (!running) return;
+      running = false;
+      clearInterval(timerInterval);
+      startBtn.disabled = false;
+    }
+    function resetTimer() {
+      stopTimer();
+      elapsed = 0;
+      updateDisplay();
+    }
+
+    // --- RECORD CURRENT TIME + TASK NAME ---
+    function recordTime() {
+      if (elapsed === 0) return; // Don't record 00:00:00
+      const taskName = taskInput.value.trim() || "(No task)";
+      const li = document.createElement('li');
+      li.innerHTML = `<span class="task">${taskName}</span><span class="time">${formatTime(elapsed)}</span>`;
+      recordedList.insertBefore(li, recordedList.firstChild);
+      taskInput.value = "";
+      taskInput.focus();
+    }
+
+    // --- EVENT LISTENERS ---
+    startBtn.addEventListener('click', startTimer);
+    stopBtn.addEventListener('click', stopTimer);
+    resetBtn.addEventListener('click', resetTimer);
+    recordBtn.addEventListener('click', recordTime);
+    // Optional: Allow Enter key to record time if input focused
+    taskForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      recordTime();
+    });
+
+    // --- INIT ---
+    updateDisplay();
+  </script>
+</body>
+</html>
