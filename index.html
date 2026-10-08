@@ -1,10 +1,10 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Minimal Task Timer</title>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -15,6 +15,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      padding: 1rem;
     }
     .timer-container {
       background: #fff;
@@ -22,7 +23,7 @@
       box-shadow: 0 6px 24px 0 #23272f10;
       padding: 2rem 1.5rem;
       width: 100%;
-      max-width: 380px;
+      max-width: 420px;
       display: flex;
       flex-direction: column;
       gap: 1.5rem;
@@ -50,11 +51,15 @@
       font-size: 1rem;
       font-weight: 500;
       cursor: pointer;
-      transition: background 0.18s;
+      transition: background 0.18s, opacity 0.18s;
       color: #1a1b1f;
     }
     button:active {
       background: #e1e6ee;
+    }
+    button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
     }
     .btn-primary {
       background: #246bfd;
@@ -62,6 +67,13 @@
     }
     .btn-primary:active {
       background: #184bb1;
+    }
+    .btn-danger {
+      background: #ffe8e8;
+      color: #b42318;
+    }
+    .btn-danger:active {
+      background: #ffd4d4;
     }
     .task-input-group {
       display: flex;
@@ -80,45 +92,111 @@
     .task-input:focus {
       border: 1.5px solid #246bfd;
     }
+    .history-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+    }
+    .history-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #4b5563;
+    }
+    .history-meta {
+      font-size: 0.8rem;
+      color: #6b7280;
+      font-weight: 500;
+    }
+    .actions-group {
+      display: flex;
+      gap: 0.6rem;
+    }
+    .actions-group button {
+      font-size: 0.92rem;
+      padding: 0.6rem 0;
+    }
     .recorded-list {
       list-style: none;
-      max-height: 170px;
+      max-height: 220px;
       overflow-y: auto;
-      margin-top: 0.5rem;
       padding-left: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
     }
     .recorded-list li {
-      padding: 0.4rem 0.7rem;
+      padding: 0.55rem 0.7rem;
       background: #f4f7fa;
       border-radius: 0.4rem;
       font-size: 1rem;
-      margin-bottom: 0.35rem;
       display: flex;
       justify-content: space-between;
       align-items: center;
+      gap: 0.6rem;
       color: #292d34;
-      flex-wrap: wrap;
+    }
+    .recorded-list li .entry-main {
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+      min-width: 0;
+      flex: 1;
     }
     .recorded-list li .task {
       font-weight: 600;
-      margin-right: 0.8em;
       color: #246bfd;
       white-space: pre-line;
+      word-break: break-word;
+    }
+    .recorded-list li .meta {
+      font-size: 0.78rem;
+      color: #6b7280;
     }
     .recorded-list li .time {
       font-family: monospace;
       font-size: 1.05em;
       color: #343a40;
+      flex-shrink: 0;
     }
-    .recorded-list li:last-child { margin-bottom: 0; }
+    .delete-btn {
+      flex: 0 0 auto;
+      width: 1.8rem;
+      height: 1.8rem;
+      padding: 0;
+      border-radius: 0.4rem;
+      background: transparent;
+      color: #9ca3af;
+      font-size: 1.1rem;
+      line-height: 1;
+    }
+    .delete-btn:hover {
+      background: #ffe8e8;
+      color: #b42318;
+    }
+    .empty-state {
+      text-align: center;
+      color: #9ca3af;
+      font-size: 0.92rem;
+      padding: 0.75rem 0.5rem;
+    }
+    .hint {
+      text-align: center;
+      font-size: 0.78rem;
+      color: #9ca3af;
+      line-height: 1.4;
+    }
     @media (max-width: 500px) {
       .timer-container {
-        padding: 1.2rem 0.3rem;
+        padding: 1.2rem 0.75rem;
         max-width: 98vw;
       }
       .timer-display { font-size: 2rem; }
       .task-input { font-size: 0.98rem; }
       .recorded-list li { font-size: 0.98rem; }
+      .actions-group {
+        flex-direction: column;
+      }
     }
   </style>
 </head>
@@ -126,11 +204,11 @@
   <div class="timer-container">
     <div class="timer-display" id="timer">00:00:00</div>
     <div class="btn-group">
-      <button id="startBtn" class="btn-primary">Start</button>
-      <button id="stopBtn">Stop</button>
-      <button id="resetBtn">Reset</button>
+      <button id="startBtn" class="btn-primary" type="button">Start</button>
+      <button id="stopBtn" type="button">Stop</button>
+      <button id="resetBtn" type="button">Reset</button>
     </div>
-    <form class="task-input-group" id="taskForm" autocomplete="off" onsubmit="return false;">
+    <form class="task-input-group" id="taskForm" autocomplete="off">
       <input
         type="text"
         id="taskInput"
@@ -138,26 +216,45 @@
         placeholder="Enter task name (optional)"
         maxlength="80"
       />
-      <button id="recordBtn" type="button">Record Time</button>
+      <button id="recordBtn" type="submit">Record Time</button>
     </form>
+
+    <div class="history-header">
+      <div>
+        <div class="history-title">Recorded times</div>
+        <div class="history-meta" id="historyMeta">0 entries · saved on this device</div>
+      </div>
+    </div>
+
+    <div class="actions-group">
+      <button id="exportBtn" class="btn-primary" type="button">Download Excel</button>
+      <button id="clearBtn" class="btn-danger" type="button">Clear history</button>
+    </div>
+
     <ul class="recorded-list" id="recordedList"></ul>
+    <p class="hint">Entries stay on this browser after refresh. Download Excel anytime to keep a copy.</p>
   </div>
 
   <script>
-    // --- TIMER VARIABLES ---
-    let startTime = 0, elapsed = 0, timerInterval = null, running = false;
+    const STORAGE_KEY = 'minimal-task-timer-v2';
 
-    // --- DOM ELEMENTS ---
+    let startTime = 0;
+    let elapsed = 0;
+    let timerInterval = null;
+    let running = false;
+    let records = [];
+
     const timerDisplay = document.getElementById('timer');
     const startBtn = document.getElementById('startBtn');
     const stopBtn = document.getElementById('stopBtn');
     const resetBtn = document.getElementById('resetBtn');
-    const recordBtn = document.getElementById('recordBtn');
     const taskInput = document.getElementById('taskInput');
     const recordedList = document.getElementById('recordedList');
     const taskForm = document.getElementById('taskForm');
+    const exportBtn = document.getElementById('exportBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const historyMeta = document.getElementById('historyMeta');
 
-    // --- FORMAT SECONDS TO HH:MM:SS ---
     function formatTime(ms) {
       const totalSeconds = Math.floor(ms / 1000);
       const h = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
@@ -166,12 +263,113 @@
       return `${h}:${m}:${s}`;
     }
 
-    // --- UPDATE TIMER DISPLAY ---
+    function formatDateTime(iso) {
+      const date = new Date(iso);
+      if (Number.isNaN(date.getTime())) return '';
+      return date.toLocaleString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+    }
+
+    function createId() {
+      if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+        return window.crypto.randomUUID();
+      }
+      return `entry-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    }
+
     function updateDisplay() {
       timerDisplay.textContent = formatTime(elapsed);
     }
 
-    // --- TIMER FUNCTIONS ---
+    function updateActionButtons() {
+      const hasRecords = records.length > 0;
+      exportBtn.disabled = !hasRecords;
+      clearBtn.disabled = !hasRecords;
+      historyMeta.textContent = `${records.length} entr${records.length === 1 ? 'y' : 'ies'} · saved on this device`;
+    }
+
+    function saveState() {
+      const payload = {
+        version: 1,
+        elapsed,
+        running,
+        startTime: running ? startTime : null,
+        records,
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+      updateActionButtons();
+    }
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return;
+        const data = JSON.parse(raw);
+        records = Array.isArray(data.records) ? data.records : [];
+        elapsed = typeof data.elapsed === 'number' ? data.elapsed : 0;
+
+        if (data.running && typeof data.startTime === 'number') {
+          const recoveredElapsed = Date.now() - data.startTime;
+          elapsed = recoveredElapsed > 0 ? recoveredElapsed : elapsed;
+          running = true;
+          startTime = Date.now() - elapsed;
+          timerInterval = setInterval(() => {
+            elapsed = Date.now() - startTime;
+            updateDisplay();
+            saveState();
+          }, 200);
+          startBtn.disabled = true;
+        }
+      } catch (error) {
+        console.warn('Could not restore saved timer data.', error);
+        records = [];
+        elapsed = 0;
+        running = false;
+      }
+    }
+
+    function renderRecords() {
+      recordedList.innerHTML = '';
+
+      if (!records.length) {
+        const empty = document.createElement('li');
+        empty.className = 'empty-state';
+        empty.textContent = 'No recorded times yet';
+        recordedList.appendChild(empty);
+        updateActionButtons();
+        return;
+      }
+
+      records.forEach((record) => {
+        const li = document.createElement('li');
+        li.innerHTML = `
+          <div class="entry-main">
+            <span class="task">${escapeHtml(record.task)}</span>
+            <span class="meta">${escapeHtml(formatDateTime(record.recordedAt))}</span>
+          </div>
+          <span class="time">${formatTime(record.elapsedMs)}</span>
+          <button class="delete-btn" type="button" data-id="${escapeHtml(record.id)}" aria-label="Delete entry">×</button>
+        `;
+        recordedList.appendChild(li);
+      });
+
+      updateActionButtons();
+    }
+
     function startTimer() {
       if (running) return;
       running = true;
@@ -179,45 +377,120 @@
       timerInterval = setInterval(() => {
         elapsed = Date.now() - startTime;
         updateDisplay();
+        saveState();
       }, 200);
       startBtn.disabled = true;
+      saveState();
     }
+
     function stopTimer() {
       if (!running) return;
       running = false;
       clearInterval(timerInterval);
+      timerInterval = null;
       startBtn.disabled = false;
+      saveState();
     }
+
     function resetTimer() {
       stopTimer();
       elapsed = 0;
       updateDisplay();
+      saveState();
     }
 
-    // --- RECORD CURRENT TIME + TASK NAME ---
     function recordTime() {
-      if (elapsed === 0) return; // Don't record 00:00:00
-      const taskName = taskInput.value.trim() || "(No task)";
-      const li = document.createElement('li');
-      li.innerHTML = `<span class="task">${taskName}</span><span class="time">${formatTime(elapsed)}</span>`;
-      recordedList.insertBefore(li, recordedList.firstChild);
-      taskInput.value = "";
+      if (elapsed === 0) return;
+
+      const taskName = taskInput.value.trim() || '(No task)';
+      records.unshift({
+        id: createId(),
+        task: taskName,
+        elapsedMs: elapsed,
+        recordedAt: new Date().toISOString(),
+      });
+
+      taskInput.value = '';
       taskInput.focus();
+      saveState();
+      renderRecords();
     }
 
-    // --- EVENT LISTENERS ---
+    function deleteRecord(id) {
+      records = records.filter((record) => record.id !== id);
+      saveState();
+      renderRecords();
+    }
+
+    function clearHistory() {
+      if (!records.length) return;
+      const confirmed = window.confirm('Clear all recorded times from this browser?');
+      if (!confirmed) return;
+      records = [];
+      saveState();
+      renderRecords();
+    }
+
+    function downloadExcel() {
+      if (!records.length || typeof XLSX === 'undefined') return;
+
+      const rows = records.map((record, index) => ({
+        '#': index + 1,
+        Task: record.task,
+        Duration: formatTime(record.elapsedMs),
+        'Duration (seconds)': Math.floor(record.elapsedMs / 1000),
+        'Recorded at': formatDateTime(record.recordedAt),
+      }));
+
+      const totalSeconds = records.reduce(
+        (sum, record) => sum + Math.floor(record.elapsedMs / 1000),
+        0
+      );
+
+      rows.push({
+        '#': '',
+        Task: 'TOTAL',
+        Duration: formatTime(totalSeconds * 1000),
+        'Duration (seconds)': totalSeconds,
+        'Recorded at': '',
+      });
+
+      const worksheet = XLSX.utils.json_to_sheet(rows);
+      worksheet['!cols'] = [
+        { wch: 4 },
+        { wch: 28 },
+        { wch: 12 },
+        { wch: 18 },
+        { wch: 22 },
+      ];
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Timer records');
+
+      const stamp = new Date().toISOString().slice(0, 10);
+      XLSX.writeFile(workbook, `timer-records-${stamp}.xlsx`);
+    }
+
     startBtn.addEventListener('click', startTimer);
     stopBtn.addEventListener('click', stopTimer);
     resetBtn.addEventListener('click', resetTimer);
-    recordBtn.addEventListener('click', recordTime);
-    // Optional: Allow Enter key to record time if input focused
-    taskForm.addEventListener('submit', (e) => {
-      e.preventDefault();
+    exportBtn.addEventListener('click', downloadExcel);
+    clearBtn.addEventListener('click', clearHistory);
+
+    taskForm.addEventListener('submit', (event) => {
+      event.preventDefault();
       recordTime();
     });
 
-    // --- INIT ---
+    recordedList.addEventListener('click', (event) => {
+      const button = event.target.closest('.delete-btn');
+      if (!button) return;
+      deleteRecord(button.dataset.id);
+    });
+
+    loadState();
     updateDisplay();
+    renderRecords();
   </script>
 </body>
 </html>
